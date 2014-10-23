@@ -51,35 +51,57 @@ int get_file_meta_data(struct oscar_hdr* md, FILE *get_file, char* file_name) {
         //assert(0);
         puts("err!");
     }
-    fclose(get_file);
+    memset(&md->oscar_name, ' ', OSCAR_MAX_FILE_NAME_LEN);
+    memset(&md->oscar_name_len, ' ', 2);
+    memset(&md->oscar_cdate, ' ', OSCAR_DATE_SIZE);
+    memset(&md->oscar_adate, ' ', OSCAR_DATE_SIZE);
+    memset(&md->oscar_mdate, ' ', OSCAR_DATE_SIZE);
+    memset(&md->oscar_uid, ' ', OSCAR_UGID_SIZE);
+    memset(&md->oscar_gid, ' ', OSCAR_UGID_SIZE);
+    memset(&md->oscar_mode, ' ', OSCAR_MODE_SIZE);
+    memset(&md->oscar_size, ' ', OSCAR_FILE_SIZE);
+    memset(&md->oscar_deleted, ' ', 1);
+    memset(&md->oscar_hdr_end, ' ', OSCAR_HDR_END_LEN);
+
     snprintf(&md->oscar_name, OSCAR_MAX_FILE_NAME_LEN, "%s", file_name);
     snprintf(&md->oscar_name_len, 2, "%lu", strlen(file_name));
     snprintf(&md->oscar_cdate, OSCAR_DATE_SIZE, "%ld", statdat.st_birthtime);
     snprintf(&md->oscar_adate, OSCAR_DATE_SIZE, "%ld", statdat.st_atime);
     snprintf(&md->oscar_mdate, OSCAR_DATE_SIZE, "%ld", statdat.st_mtime);
+    puts("these two are broken");
     snprintf(&md->oscar_uid, OSCAR_UGID_SIZE, "%u", statdat.st_uid);
     snprintf(&md->oscar_gid, OSCAR_UGID_SIZE, "%u", statdat.st_gid);
     snprintf(&md->oscar_mode, OSCAR_MODE_SIZE, "%hu", statdat.st_mode);
     snprintf(&md->oscar_size, OSCAR_FILE_SIZE, "%lld", statdat.st_size);
     snprintf(&md->oscar_deleted, 1, "%s", " ");
     snprintf(&md->oscar_hdr_end, OSCAR_HDR_END_LEN, "%s", OSCAR_HDR_END);
-    memset(&md->oscar_sha1, 0, OSCAR_SHA_DIGEST_LEN);
+    printf("ee %s, %i", md->oscar_hdr_end, strlen(md->oscar_hdr_end));
     return 0;
 }
 
 int write_file_meta_data(struct oscar_hdr* md, FILE *file_out) {
     fwrite(&md->oscar_name, OSCAR_MAX_FILE_NAME_LEN, 1, file_out);
+    fwrite("  ", 2, 1, file_out);
     fwrite(&md->oscar_name_len, 2, 1, file_out);
     fwrite(&md->oscar_cdate, OSCAR_DATE_SIZE, 1, file_out);
+    fwrite("  ", 2, 1, file_out);
     fwrite(&md->oscar_adate, OSCAR_DATE_SIZE, 1, file_out);
+    fwrite("  ", 2, 1, file_out);
     fwrite(&md->oscar_mdate, OSCAR_DATE_SIZE, 1, file_out);
+    fwrite("  ", 2, 1, file_out);
     fwrite(&md->oscar_uid, OSCAR_UGID_SIZE, 1, file_out);
+    fwrite("  ", 2, 1, file_out);
     fwrite(&md->oscar_gid, OSCAR_UGID_SIZE, 1, file_out);
+    fwrite("  ", 2, 1, file_out);
     fwrite(&md->oscar_mode, OSCAR_MODE_SIZE, 1, file_out);
-    fwrite(&md->oscar_size, OSCAR_MAX_MEMBER_FILE_SIZE, 1, file_out);
+    fwrite("  ", 2, 1, file_out);
+    fwrite(&md->oscar_size, OSCAR_FILE_SIZE, 1, file_out);
+    fwrite("  ", 2, 1, file_out);
     fwrite(&md->oscar_deleted, 1, 1, file_out);
+    fwrite("  ", 2, 1, file_out);
     fwrite(&md->oscar_sha1, OSCAR_SHA_DIGEST_LEN, 1, file_out);
-    fwrite(&md->oscar_hdr_end, OSCAR_HDR_END_LEN, 1, file_out);
+    fwrite("  ", 2, 1, file_out);
+    fwrite(OSCAR_HDR_END, OSCAR_HDR_END_LEN, 1, file_out);
     return 0;
 }
 
