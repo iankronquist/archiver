@@ -1,5 +1,5 @@
 CC=clang
-CFLAGS= -std=c99 -ffreestanding -O2 -Wall -Wextra -Wno-incompatible-pointer-types -g
+CFLAGS=  -O0 -Wall -Wextra -Wno-incompatible-pointer-types -g
 
 all: ar
 
@@ -16,3 +16,4 @@ build:
 clean:
 	rm -rf build
 	rm -rf tests
+	rm test.ar
