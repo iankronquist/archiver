@@ -22,67 +22,57 @@ void print_md(struct oscar_hdr *md);
 void trim_trailing_spaces(char *fn, int length);
 
 int main() {
-    /*
-    puts("0");
+    extract_archive("arch24.oscar");
     FILE *new_archive = create_new_archive("test.ar");
-    puts("1");
     FILE *read_file_1 = fopen("2-s.txt", "r");
-    puts("2");
     FILE *read_file_2 = fopen("4-s.txt", "r");
-    puts("3");
     append_file(read_file_1, "2-s.txt", new_archive);
-    puts("4");
     append_file(read_file_2, "4-s.txt", new_archive);
-    puts("5");
     fclose(new_archive);
     fclose(read_file_1);
     fclose(read_file_2);
-    */
-    puts("6");
-    extract_archive("arch24.oscar");
-    puts("7");
     return 0;
 }
 
 void extract_archive(char* archive_name) {
     struct oscar_hdr md;
-    FILE *current_file;
+    FILE *current_file = NULL;
     FILE *archive = fopen(archive_name, "r");
-    fseek(archive, OSCAR_ID_LEN, SEEK_SET);
-    puts("6.5");
+    fseek(archive, OSCAR_ID_LEN+1, SEEK_SET);
+    char ch;
     while (!feof(archive)) {
+        fseek(archive, -1, SEEK_CUR);
         read_file_meta_data(&md, archive);
-        puts("extracting file");
-        // TODO: add existence checks
-        char *fn = malloc(OSCAR_MAX_FILE_NAME_LEN);
-        memcpy(fn, md.oscar_name, OSCAR_MAX_FILE_NAME_LEN);
-        trim_trailing_spaces(fn, OSCAR_MAX_FILE_NAME_LEN);
-        current_file = fopen(fn, "w");
+        char fn[OSCAR_MAX_FILE_NAME_LEN];
+        memcpy(&fn, md.oscar_name, OSCAR_MAX_FILE_NAME_LEN);
+        trim_trailing_spaces(&fn, OSCAR_MAX_FILE_NAME_LEN);
+        current_file = fopen(&fn, "w");
+        assert(current_file != NULL);
         n_read_and_write_file(archive, current_file,
             strtol(md.oscar_size, NULL, 10)
         );
-        //twiddle_meta_data(&md, current_file);
+        twiddle_meta_data(&md, current_file);
         fclose(current_file);
-        fseek(archive, -1, SEEK_CUR);
     }
     fclose(archive);
-    puts("6.75");
 }
 
 void trim_trailing_spaces(char *fn, int length) {
-    for (int i = length - 1; i > 0; i++) {
-        if (i != ' ') {
+    for (int i = length - 1; i > 0; i--) {
+        if (fn[i] != ' ') {
             if (i < length-2) {
                 fn[i+1] = '\0';
             }
+            return;
         }
     }
 }
 
 FILE* create_new_archive(char* filename) {
-    /*if (access(filename, W_OK) != 0) {
-        assert(0);
-    }*/
+    if (access(filename, F_OK) != -1) {
+        printf("Archive %s already exists!\n", filename);
+        exit(-1);
+    }
     FILE *out_file = fopen(filename, "w");
     fprintf(out_file, "%s", OSCAR_ID);
     return out_file;
@@ -121,67 +111,18 @@ int get_file_meta_data(struct oscar_hdr* md, FILE *get_file, char* file_name) {
     snprintf(&md->oscar_deleted, 1, "%s", " ");
     snprintf(&md->oscar_hdr_end, OSCAR_HDR_END_LEN, "%s", OSCAR_HDR_END);
 
-    printf("ee %s, %zu", md->oscar_hdr_end, strlen(md->oscar_hdr_end));
     return 0;
 }
 
 int write_file_meta_data(struct oscar_hdr* md, FILE *file_out) {
-    /*
-    fwrite(&md->oscar_name, OSCAR_MAX_FILE_NAME_LEN, 1, file_out);
-    fwrite("  ", 2, 1, file_out);
-    fwrite(&md->oscar_name_len, 2, 1, file_out);
-    fwrite(&md->oscar_cdate, OSCAR_DATE_SIZE, 1, file_out);
-    fwrite(" ", 2, 1, file_out);
-    fwrite(&md->oscar_adate, OSCAR_DATE_SIZE, 1, file_out);
-    fwrite(" ", 2, 1, file_out);
-    fwrite(&md->oscar_mdate, OSCAR_DATE_SIZE, 1, file_out);
-    fwrite(" ", 2, 1, file_out);
-    fwrite(&md->oscar_uid, OSCAR_UGID_SIZE, 1, file_out);
-    fwrite(" ", 2, 1, file_out);
-    fwrite(&md->oscar_gid, OSCAR_UGID_SIZE, 1, file_out);
-    fwrite(" ", 2, 1, file_out);
-    fwrite(&md->oscar_mode, OSCAR_MODE_SIZE, 1, file_out);
-    fwrite(" ", 2, 1, file_out);
-    fwrite(&md->oscar_size, OSCAR_FILE_SIZE, 1, file_out);
-    fwrite(" ", 2, 1, file_out);
-    fwrite(&md->oscar_deleted, 1, 1, file_out);
-    fwrite(" ", 2, 1, file_out);
-    fwrite(&md->oscar_sha1, OSCAR_SHA_DIGEST_LEN, 1, file_out);
-    fwrite(" ", 2, 1, file_out);
-    fwrite(OSCAR_HDR_END, OSCAR_HDR_END_LEN, 1, file_out);
-    */
     fwrite(&md, sizeof(struct oscar_hdr), 1, file_out);
     return 0;
 }
 
 int read_file_meta_data(struct oscar_hdr *md, FILE *file_in) {
     assert(!feof(file_in));
-    /*
-    fread(&md->oscar_name, OSCAR_MAX_FILE_NAME_LEN, 1, file_in);
-    fseek(file_in, 1, SEEK_CUR);
-    fread(&md->oscar_name_len, 2, 1, file_in);
-    fread(&md->oscar_cdate, OSCAR_DATE_SIZE, 1, file_in);
-    fseek(file_in, 1, SEEK_CUR);
-    fread(&md->oscar_adate, OSCAR_DATE_SIZE, 1, file_in);
-    fseek(file_in, 1, SEEK_CUR);
-    fread(&md->oscar_mdate, OSCAR_DATE_SIZE, 1, file_in);
-    fseek(file_in, 1, SEEK_CUR);
-    fread(&md->oscar_uid, OSCAR_UGID_SIZE, 1, file_in);
-    fseek(file_in, 1, SEEK_CUR);
-    fread(&md->oscar_gid, OSCAR_UGID_SIZE, 1, file_in);
-    fseek(file_in, 1, SEEK_CUR);
-    fread(&md->oscar_mode, OSCAR_MODE_SIZE, 1, file_in);
-    fseek(file_in, 1, SEEK_CUR);
-    fread(&md->oscar_size, OSCAR_MAX_MEMBER_FILE_SIZE, 1, file_in);
-    fseek(file_in, 1, SEEK_CUR);
-    fread(&md->oscar_deleted, 1, 1, file_in);
-    fseek(file_in, 1, SEEK_CUR);
-    fread(&md->oscar_sha1, OSCAR_SHA_DIGEST_LEN, 1, file_in);
-    fseek(file_in, 2, SEEK_CUR);
-    fread(&md->oscar_hdr_end, OSCAR_HDR_END_LEN, 1, file_in);
-    */
     fread(md, sizeof(struct oscar_hdr), 1, file_in);
-    print_md(md);
+    assert(!feof(file_in));
     return 0;
 }
 
@@ -212,12 +153,9 @@ int twiddle_meta_data(struct oscar_hdr *md, FILE *file_in) {
     puts("TODO: verify that md->oscar_mode is in octal!");
     unsigned int uid, gid = 0;
     unsigned short mode = 0;
-    mode = (unsigned short)strtol(&md->oscar_mode,
-                                  &md->oscar_mode + OSCAR_MODE_SIZE, 8);
-    uid = (unsigned int)strtol(&md->oscar_uid,
-                               &md->oscar_uid + OSCAR_UGID_SIZE, 0);
-    gid = (unsigned int)strtol(&md->oscar_gid,
-                               &md->oscar_gid + OSCAR_UGID_SIZE, 0);
+    mode = (unsigned short)strtol(&md->oscar_mode, NULL, 8);
+    uid = (unsigned int)strtol(&md->oscar_uid, NULL, 0);
+    gid = (unsigned int)strtol(&md->oscar_gid, NULL, 0);
     puts("converted");
     fchmod(fileno(file_in), mode);
     fchown(fileno(file_in), uid, gid);
@@ -227,7 +165,6 @@ int twiddle_meta_data(struct oscar_hdr *md, FILE *file_in) {
 }
 
 int append_file(FILE *in_file, char* in_file_name, FILE *archive) {
-    puts("appending file");
     struct oscar_hdr md;
     fseek(archive, 0, SEEK_END);
     get_file_meta_data(&md, in_file, in_file_name);
@@ -237,7 +174,6 @@ int append_file(FILE *in_file, char* in_file_name, FILE *archive) {
 }
 
 int read_and_write_file(FILE* file_in, FILE *file_out) {
-    puts("writing file");
     char ch;
     while((ch = fgetc(file_in)) != EOF) {
         fputc(ch, file_out);
@@ -246,7 +182,6 @@ int read_and_write_file(FILE* file_in, FILE *file_out) {
 }
 
 int n_read_and_write_file(FILE* file_in, FILE *file_out, size_t num_bytes) {
-    puts("writing file by chunk");
     char ch;
     size_t bytes_read = 0;
     assert(!feof(file_in));
