@@ -39,14 +39,14 @@ void extract_archive(char* archive_name) {
     FILE *current_file = NULL;
     FILE *archive = fopen(archive_name, "r");
     fseek(archive, OSCAR_ID_LEN+1, SEEK_SET);
-    char ch;
     while (!feof(archive)) {
         fseek(archive, -1, SEEK_CUR);
         read_file_meta_data(&md, archive);
-        char fn[OSCAR_MAX_FILE_NAME_LEN];
-        memcpy(&fn, md.oscar_name, OSCAR_MAX_FILE_NAME_LEN);
-        trim_trailing_spaces(&fn, OSCAR_MAX_FILE_NAME_LEN);
-        current_file = fopen(&fn, "w");
+        char file_name[OSCAR_MAX_FILE_NAME_LEN];
+        memcpy(&file_name, md.oscar_name, OSCAR_MAX_FILE_NAME_LEN);
+        trim_trailing_spaces(&file_name, OSCAR_MAX_FILE_NAME_LEN);
+        print_md(&md);
+        current_file = fopen(&file_name, "w");
         assert(current_file != NULL);
         n_read_and_write_file(archive, current_file,
             strtol(md.oscar_size, NULL, 10)
@@ -85,22 +85,22 @@ int get_file_meta_data(struct oscar_hdr* md, FILE *get_file, char* file_name) {
         printf("Could not get metadata from %s!", file_name);
         assert(0);
     }
-    memset(&md->oscar_name, 0, OSCAR_MAX_FILE_NAME_LEN);
-    memset(&md->oscar_name_len, 0, 2);
-    memset(&md->oscar_cdate, 0, OSCAR_DATE_SIZE);
-    memset(&md->oscar_adate, 0, OSCAR_DATE_SIZE);
-    memset(&md->oscar_mdate, 0, OSCAR_DATE_SIZE);
-    memset(&md->oscar_uid, 0, OSCAR_UGID_SIZE);
-    memset(&md->oscar_gid, 0, OSCAR_UGID_SIZE);
-    memset(&md->oscar_mode, 0, OSCAR_MODE_SIZE);
-    memset(&md->oscar_size, 0, OSCAR_FILE_SIZE);
-    memset(&md->oscar_deleted, 0, 1);
-    memset(&md->oscar_sha1, 0, OSCAR_SHA_DIGEST_LEN);
-    memset(&md->oscar_hdr_end, 0, OSCAR_HDR_END_LEN);
+    memset(&md->oscar_name, ' ', OSCAR_MAX_FILE_NAME_LEN);
+    memset(&md->oscar_name_len, ' ', 2);
+    memset(&md->oscar_cdate, ' ', OSCAR_DATE_SIZE);
+    memset(&md->oscar_adate, ' ', OSCAR_DATE_SIZE);
+    memset(&md->oscar_mdate, ' ', OSCAR_DATE_SIZE);
+    memset(&md->oscar_uid, ' ', OSCAR_UGID_SIZE);
+    memset(&md->oscar_gid, ' ', OSCAR_UGID_SIZE);
+    memset(&md->oscar_mode, ' ', OSCAR_MODE_SIZE);
+    memset(&md->oscar_size, ' ', OSCAR_FILE_SIZE);
+    memset(&md->oscar_deleted, ' ', 1);
+    memset(&md->oscar_sha1, ' ', OSCAR_SHA_DIGEST_LEN);
+    memset(&md->oscar_hdr_end, ' ', OSCAR_HDR_END_LEN);
 
     snprintf(&md->oscar_name, OSCAR_MAX_FILE_NAME_LEN, "%s", file_name);
     snprintf(&md->oscar_name_len, 2, "%lu", strlen(file_name));
-    snprintf(&md->oscar_cdate, OSCAR_DATE_SIZE, "%ld", statdat.st_birthtime);
+    snprintf(&md->oscar_cdate, OSCAR_DATE_SIZE, "%ld", statdat.st_ctime);
     snprintf(&md->oscar_adate, OSCAR_DATE_SIZE, "%ld", statdat.st_atime);
     snprintf(&md->oscar_mdate, OSCAR_DATE_SIZE, "%ld", statdat.st_mtime);
     //puts("these two are broken");
@@ -110,18 +110,52 @@ int get_file_meta_data(struct oscar_hdr* md, FILE *get_file, char* file_name) {
     snprintf(&md->oscar_size, OSCAR_FILE_SIZE, "%lld", statdat.st_size);
     snprintf(&md->oscar_deleted, 1, "%s", " ");
     snprintf(&md->oscar_hdr_end, OSCAR_HDR_END_LEN, "%s", OSCAR_HDR_END);
+    print_md(md);
 
     return 0;
 }
 
 int write_file_meta_data(struct oscar_hdr* md, FILE *file_out) {
-    fwrite(&md, sizeof(struct oscar_hdr), 1, file_out);
+    int total_bytes = 0;
+    total_bytes += write(fileno(file_out), &md->oscar_name, OSCAR_MAX_FILE_NAME_LEN);
+    total_bytes += write(fileno(file_out), "  ", 2);
+    total_bytes += write(fileno(file_out), &md->oscar_name_len, 2);
+    total_bytes += write(fileno(file_out), &md->oscar_cdate, OSCAR_DATE_SIZE);
+    total_bytes += write(fileno(file_out), " ", 1);
+    total_bytes += write(fileno(file_out), &md->oscar_adate, OSCAR_DATE_SIZE);
+    total_bytes += write(fileno(file_out), " ", 1);
+    total_bytes += write(fileno(file_out), &md->oscar_mdate, OSCAR_DATE_SIZE);
+    total_bytes += write(fileno(file_out), " ", 1);
+    total_bytes += write(fileno(file_out), &md->oscar_uid, OSCAR_UGID_SIZE);
+    total_bytes += write(fileno(file_out), " ", 1);
+    total_bytes += write(fileno(file_out), &md->oscar_gid, OSCAR_UGID_SIZE);
+    total_bytes += write(fileno(file_out), " ", 1);
+    total_bytes += write(fileno(file_out), &md->oscar_mode, OSCAR_MODE_SIZE);
+    total_bytes += write(fileno(file_out), " ", 1);
+    total_bytes += write(fileno(file_out), &md->oscar_size, OSCAR_FILE_SIZE);
+    total_bytes += write(fileno(file_out), " ", 1);
+    total_bytes += write(fileno(file_out), &md->oscar_deleted, 1);
+    total_bytes += write(fileno(file_out), &md->oscar_sha1, OSCAR_SHA_DIGEST_LEN);
+    total_bytes += write(fileno(file_out), OSCAR_HDR_END, OSCAR_HDR_END_LEN);
     return 0;
 }
 
 int read_file_meta_data(struct oscar_hdr *md, FILE *file_in) {
     assert(!feof(file_in));
-    fread(md, sizeof(struct oscar_hdr), 1, file_in);
+    int total_bytes = 0;
+    total_bytes += fread(&md->oscar_name, OSCAR_MAX_FILE_NAME_LEN, 1, file_in);
+    total_bytes += fread(&md->oscar_name_len, 2, 1, file_in);
+    total_bytes += fread(&md->oscar_cdate, OSCAR_DATE_SIZE, 1, file_in);
+    total_bytes += fread(&md->oscar_adate, OSCAR_DATE_SIZE, 1, file_in);
+    total_bytes += fread(&md->oscar_mdate, OSCAR_DATE_SIZE, 1, file_in);
+    total_bytes += fread(&md->oscar_uid, OSCAR_UGID_SIZE, 1, file_in);
+    total_bytes += fread(&md->oscar_gid, OSCAR_UGID_SIZE, 1, file_in);
+    total_bytes += fread(&md->oscar_mode, OSCAR_MODE_SIZE, 1, file_in);
+    total_bytes += fread(&md->oscar_size, OSCAR_FILE_SIZE, 1, file_in);
+    total_bytes += fread(&md->oscar_deleted, 1, 1, file_in);
+    total_bytes += fread(&md->oscar_sha1, OSCAR_SHA_DIGEST_LEN, 1, file_in);
+    total_bytes += fread(&md->oscar_hdr_end, OSCAR_HDR_END_LEN, 1, file_in);
+    print_md(&md);
     assert(!feof(file_in));
     return 0;
 }
@@ -149,7 +183,7 @@ int twiddle_meta_data(struct oscar_hdr *md, FILE *file_in) {
     buf.actime = atime;
     buf.modtime = mtime;
     puts("TODO: change birthtime!");
-    //futimes(fileno(file_in), &buf);
+    futimes(fileno(file_in), &buf);
     puts("TODO: verify that md->oscar_mode is in octal!");
     unsigned int uid, gid = 0;
     unsigned short mode = 0;
@@ -160,7 +194,6 @@ int twiddle_meta_data(struct oscar_hdr *md, FILE *file_in) {
     fchmod(fileno(file_in), mode);
     fchown(fileno(file_in), uid, gid);
     puts("chmoded and cowned");
-
     return 0;
 }
 
