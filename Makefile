@@ -1,5 +1,5 @@
 CC=clang
-CFLAGS=  -O0 -Wall -Wextra -Wno-incompatible-pointer-types -g
+CFLAGS=  -O0 -Wall -Wextra -g
 
 all: ar
 
