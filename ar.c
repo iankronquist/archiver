@@ -33,7 +33,6 @@ bool list_contains(char** file_names, int num_files, char* file_name);
 int main() {
     char* files_to_delete[] = {"2-s.txt", "4-s.txt"};
     extract_archive("arch24.oscar", 2, files_to_delete);
-    //extract_archive("test.ar", 1, files_to_delete);
     FILE *new_archive = create_new_archive("test.ar");
     FILE *read_file_1 = fopen("2-s.txt", "r");
     FILE *read_file_2 = fopen("4-s.txt", "r");
@@ -43,6 +42,7 @@ int main() {
     fclose(read_file_1);
     fclose(read_file_2);
     delete("test.ar", 1, files_to_delete);
+    extract_archive("test.ar", 1, files_to_delete);
     return 0;
 }
 
@@ -249,28 +249,6 @@ void delete(char *archive_name, size_t number_of_files,
 
 int write_file_meta_data(struct oscar_hdr* md, FILE *file_out) {
     int total_bytes = 0;
-    /*
-    total_bytes += write(fileno(file_out), &md->oscar_name, OSCAR_MAX_FILE_NAME_LEN);
-    //total_bytes += write(fileno(file_out), "  ", 2);
-    total_bytes += write(fileno(file_out), &md->oscar_name_len, 2);
-    total_bytes += write(fileno(file_out), &md->oscar_cdate, OSCAR_DATE_SIZE);
-    // total_bytes += write(fileno(file_out), " ", 1);
-    total_bytes += write(fileno(file_out), &md->oscar_adate, OSCAR_DATE_SIZE);
-    //total_bytes += write(fileno(file_out), " ", 1);
-    total_bytes += write(fileno(file_out), &md->oscar_mdate, OSCAR_DATE_SIZE);
-    //total_bytes += write(fileno(file_out), " ", 1);
-    total_bytes += write(fileno(file_out), &md->oscar_uid, OSCAR_UGID_SIZE);
-    //total_bytes += write(fileno(file_out), " ", 1);
-    total_bytes += write(fileno(file_out), &md->oscar_gid, OSCAR_UGID_SIZE);
-    //total_bytes += write(fileno(file_out), " ", 1);
-    total_bytes += write(fileno(file_out), &md->oscar_mode, OSCAR_MODE_SIZE);
-    //total_bytes += write(fileno(file_out), " ", 1);
-    total_bytes += write(fileno(file_out), &md->oscar_size, OSCAR_FILE_SIZE);
-    //total_bytes += write(fileno(file_out), " ", 1);
-    total_bytes += write(fileno(file_out), &md->oscar_deleted, 1);
-    total_bytes += write(fileno(file_out), &md->oscar_sha1, OSCAR_SHA_DIGEST_LEN);
-    total_bytes += write(fileno(file_out), OSCAR_HDR_END, OSCAR_HDR_END_LEN);
-    */
     total_bytes += write(fileno(file_out), md, sizeof(struct oscar_hdr)-OSCAR_HDR_END_LEN);
     total_bytes += write(fileno(file_out), OSCAR_HDR_END, OSCAR_HDR_END_LEN);
     return 0;
@@ -283,6 +261,7 @@ long ltell(int file_des) {
 int read_file_meta_data(struct oscar_hdr *md, FILE *file_in) {
     assert(!feof(file_in));
     int total_bytes = 0;
+    /*
     total_bytes += fread(&md->oscar_name, OSCAR_MAX_FILE_NAME_LEN, 1, file_in);
     total_bytes += fread(&md->oscar_name_len, 2, 1, file_in);
     total_bytes += fread(&md->oscar_cdate, OSCAR_DATE_SIZE, 1, file_in);
@@ -295,12 +274,15 @@ int read_file_meta_data(struct oscar_hdr *md, FILE *file_in) {
     total_bytes += fread(&md->oscar_deleted, 1, 1, file_in);
     total_bytes += fread(&md->oscar_sha1, OSCAR_SHA_DIGEST_LEN, 1, file_in);
     total_bytes += fread(&md->oscar_hdr_end, OSCAR_HDR_END_LEN, 1, file_in);
-    //total_bytes += fread(md, 1, sizeof(struct oscar_hdr), file_in);
+    */
+    total_bytes += fread(md, sizeof(struct oscar_hdr), 1, file_in);
+    //assert(total_bytes == sizeof(struct oscar_hdr));
     assert(!feof(file_in));
     return 0;
 }
 
 void print_md(struct oscar_hdr *md) {
+    /*
     puts("md begin");
     printf("%.32s\n", &md->oscar_name);
     printf("%.2s\n", &md->oscar_name_len);
@@ -314,16 +296,20 @@ void print_md(struct oscar_hdr *md) {
     printf("%.1s\n", &md->oscar_deleted);
     printf("%.2s\n", &md->oscar_hdr_end);
     puts("md end");
-    //puts("commented out");
+    */
+    puts("commented out");
 }
 
 int twiddle_meta_data(struct oscar_hdr *md, FILE *file_in) {
-    struct utimbuf buf;
     time_t atime, mtime = 0;
+    struct timeval amtimeval[2];
     atime = strtoul(md->oscar_adate, NULL, 0);
-    buf.actime = atime;
-    buf.modtime = mtime;
-    futimes(fileno(file_in), &buf);
+    mtime = strtoul(md->oscar_mdate, NULL, 0);
+    amtimeval[0].tv_sec = atime;
+    amtimeval[0].tv_usec = 0;
+    amtimeval[1].tv_sec = mtime;
+    amtimeval[1].tv_usec = 0;
+    futimes(fileno(file_in), amtimeval);
     unsigned int uid, gid = 0;
     unsigned short mode = 0;
     mode = (unsigned short)strtol(&md->oscar_mode, NULL, 8);
