@@ -23,6 +23,9 @@ void print_md(struct oscar_hdr *md);
 void trim_trailing_spaces(char *fn, int length);
 void mark_for_deletion(char *archive_name, size_t number_of_files,
                        char** file_names);
+
+long ltell(int file_des);
+
 bool list_contains(char** file_names, int num_files, char* file_name);
 
 int main() {
@@ -37,7 +40,7 @@ int main() {
     fclose(new_archive);
     fclose(read_file_1);
     fclose(read_file_2);
-    mark_for_deletion("test.ar", 1, files_to_delete);
+    //delete("test.ar", 1, files_to_delete);
     return 0;
 }
 
@@ -58,7 +61,6 @@ void extract_archive(char* archive_name, int num_files, char** file_names) {
         char file_name[OSCAR_MAX_FILE_NAME_LEN];
         memcpy(&file_name, md.oscar_name, OSCAR_MAX_FILE_NAME_LEN);
         trim_trailing_spaces(&file_name, OSCAR_MAX_FILE_NAME_LEN);
-        puts("loopdloop");
         if ((num_files == 0 || list_contains(file_names, num_files, file_name))
             && md.oscar_deleted != 'y') {
             //TODO: check if file exists
@@ -126,8 +128,11 @@ int get_file_meta_data(struct oscar_hdr* md, FILE *get_file, char* file_name) {
         md->oscar_name[num_bytes] = ' ';
     size_t file_name_len = strlen(file_name);
     num_bytes = snprintf(&md->oscar_name_len, 2, "%zu", file_name_len);
-    if (num_bytes != 2)
-        md->oscar_name_len[num_bytes] = ' ';
+    // HACK
+    if (num_bytes != 2) {
+        md->oscar_name_len[1] = md->oscar_name_len[0];
+        md->oscar_name_len[0] = ' ';
+    }
     num_bytes = snprintf(&md->oscar_cdate, OSCAR_DATE_SIZE, "%ld", statdat.st_ctime);
     if (num_bytes != OSCAR_DATE_SIZE)
         md->oscar_cdate[num_bytes] = ' ';
@@ -137,7 +142,6 @@ int get_file_meta_data(struct oscar_hdr* md, FILE *get_file, char* file_name) {
     num_bytes = snprintf(&md->oscar_mdate, OSCAR_DATE_SIZE, "%ld", statdat.st_mtime);
     if (num_bytes != OSCAR_MAX_FILE_NAME_LEN)
         md->oscar_mdate[num_bytes] = ' ';
-    //puts("these two are broken");
     num_bytes = snprintf(&md->oscar_uid, OSCAR_UGID_SIZE, "%u", statdat.st_uid);
     if (num_bytes != OSCAR_MAX_FILE_NAME_LEN)
         md->oscar_uid[num_bytes] = ' ';
@@ -152,8 +156,8 @@ int get_file_meta_data(struct oscar_hdr* md, FILE *get_file, char* file_name) {
         md->oscar_size[num_bytes] = ' ';
     md->oscar_deleted = ' ';
     num_bytes = snprintf(&md->oscar_hdr_end, OSCAR_HDR_END_LEN, "%s", OSCAR_HDR_END);
-    if (num_bytes != OSCAR_HDR_END_LEN)
-        md->oscar_hdr_end[num_bytes] = ' ';
+    //if (num_bytes != OSCAR_HDR_END_LEN)
+    //    md->oscar_hdr_end[num_bytes] = ' ';
     return 0;
 }
 
@@ -163,32 +167,80 @@ void mark_for_deletion(char *archive_name, size_t number_of_files,
         printf("Archive %s doesn't exist!\n", archive_name);
         exit(-1);
     }
-    FILE *archive = fopen(archive_name, "r+b");
+    FILE *archive = fopen(archive_name, "r+");
     struct oscar_hdr md;
     fseek(archive, OSCAR_ID_LEN+1, SEEK_SET);
     struct oscar_hdr arch_md;
-    int file_name_len = 0;
     get_file_meta_data(&arch_md, archive, "archive!!");
-    while (ftell(archive) < strtol(arch_md.oscar_size, NULL, 10)) {
+    long archive_name_length = strtol(arch_md.oscar_size, NULL, 10);
+    assert(archive_name_length > 0);
+    long file_name_len = 0;
+    long file_size = 0;
+    char file_name[OSCAR_MAX_FILE_NAME_LEN+1];
+    while (ftell(archive) < archive_name_length) {
+        printf("ftell: %ld, arch len: %ld\n", ftell(archive),
+            archive_name_length);
+        fseek(archive, -1, SEEK_CUR);
+        fread(&md.oscar_name, OSCAR_MAX_FILE_NAME_LEN, 1, archive);
+        fread(&md.oscar_name_len, 2, 1, archive);
+        file_name_len = strtol(&md.oscar_name_len, NULL, 10);
+        assert(file_name_len > 0);
+        fseek(archive, 3 * OSCAR_DATE_SIZE + 2 * OSCAR_UGID_SIZE +
+            OSCAR_MODE_SIZE, SEEK_CUR);
+        fread(&md.oscar_size, OSCAR_FILE_SIZE, 1, archive);
+        file_size = strtol(&md.oscar_name_len, NULL, 10);
+        assert(file_size >= 0);
+        strncpy(file_name, &md.oscar_name, file_size);
+        if (list_contains(file_names, number_of_files, file_name)) {
+            printf("ftell: %ld,\n", ftell(archive));
+            fwrite("y", 1, 1, archive);
+            printf("ftell: %ld,\n", ftell(archive));
+            puts("marked");
+        } else {
+            fseek(archive, 1, SEEK_CUR);
+        }
+        fseek(archive, OSCAR_SHA_DIGEST_LEN + OSCAR_HDR_END_LEN, SEEK_CUR);
+        fseek(archive, file_size, SEEK_CUR);
+    }
+}
+
+void delete(char *archive_name, size_t number_of_files,
+                      char** file_names) {
+    if (access(archive_name, F_OK) == -1) {
+        printf("Archive %s doesn't exist!\n", archive_name);
+        exit(-1);
+    }
+    char temp_archive_name[] = "/tmp/tmp_archive";
+    FILE *archive = fopen(archive_name, "r");
+    FILE *temp_archive = create_new_archive(temp_archive);
+    struct oscar_hdr md;
+    fseek(archive, OSCAR_ID_LEN+1, SEEK_SET);
+    struct oscar_hdr arch_md;
+    get_file_meta_data(&arch_md, archive, "archive!!");
+    long archive_name_length = strtol(arch_md.oscar_size, NULL, 10);
+    assert(archive_name_length > 0);
+    long file_name_len = 0;
+    long file_size = 0;
+    char file_name[OSCAR_MAX_FILE_NAME_LEN+1];
+    while (ftell(archive) < archive_name_length) {
         fseek(archive, -1, SEEK_CUR);
         read_file_meta_data(&md, archive);
-        file_name_len = strtol(md.oscar_name_len, NULL, 10);
-        char file_name[file_name_len];
-        memcpy(&file_name, &md.oscar_name, file_name_len);
+        file_name_len = strtol(&md.oscar_name_len, NULL, 10);
+        assert(file_name_len > 0);
+        fread(&md.oscar_size, OSCAR_FILE_SIZE, 1, archive);
+        file_size = strtol(&md.oscar_name_len, NULL, 10);
+        assert(file_size >= 0);
+        strncpy(file_name, &md.oscar_name, file_size);
         if (list_contains(file_names, number_of_files, file_name)) {
-            fseek(archive, 2 +
-                      OSCAR_DATE_SIZE * 3 + OSCAR_UGID_SIZE * 2 + 
-                      OSCAR_MODE_SIZE + OSCAR_FILE_SIZE + 1, SEEK_CUR);
-            fwrite("y", 1, 1, archive);
-            puts("marked");
-            fseek(archive, OSCAR_SHA_DIGEST_LEN + OSCAR_HDR_END_LEN, SEEK_CUR);
+            fseek(archive, file_size, SEEK_CUR);
         } else {
-            print_md(&md);
-            printf("all%i size%i",OSCAR_ALL_OF_IT - OSCAR_MAX_FILE_NAME_LEN, strtol(md.oscar_size, NULL, 10));
-            fseek(archive, OSCAR_ALL_OF_IT - OSCAR_MAX_FILE_NAME_LEN, SEEK_CUR);
-            fseek(archive, strtol(md.oscar_size, NULL, 10), SEEK_CUR);
+            write_file_meta_data(&md, temp_archive);
+            n_read_and_write_file(archive, temp_archive, file_size);
         }
     }
+    fclose(archive);
+    fclose(temp_archive);
+    rename(temp_archive_name, archive_name);
 }
 
 int write_file_meta_data(struct oscar_hdr* md, FILE *file_out) {
@@ -215,8 +267,13 @@ int write_file_meta_data(struct oscar_hdr* md, FILE *file_out) {
     total_bytes += write(fileno(file_out), &md->oscar_sha1, OSCAR_SHA_DIGEST_LEN);
     total_bytes += write(fileno(file_out), OSCAR_HDR_END, OSCAR_HDR_END_LEN);
     */
-    total_bytes += write(fileno(file_out), md, sizeof(struct oscar_hdr));
+    total_bytes += write(fileno(file_out), md, sizeof(struct oscar_hdr)-OSCAR_HDR_END_LEN);
+    total_bytes += write(fileno(file_out), OSCAR_HDR_END, OSCAR_HDR_END_LEN);
     return 0;
+}
+
+long ltell(int file_des) {
+    return lseek(file_des, 0, SEEK_CUR);
 }
 
 int read_file_meta_data(struct oscar_hdr *md, FILE *file_in) {
@@ -237,10 +294,10 @@ int read_file_meta_data(struct oscar_hdr *md, FILE *file_in) {
     total_bytes += fread(&md->oscar_sha1, OSCAR_SHA_DIGEST_LEN, 1, file_in);
     total_bytes += fread(&md->oscar_hdr_end, OSCAR_HDR_END_LEN, 1, file_in);
     */
-    total_bytes += read(fileno(file_in), md, sizeof(struct oscar_hdr));
+    total_bytes += fread(md, 1, sizeof(struct oscar_hdr), file_in);
     printf("tb%i\n", total_bytes);
     printf("%lu\n", ftell(file_in));
-    assert(!feof(file_in));
+    //assert(!feof(file_in));
     return 0;
 }
 
@@ -311,8 +368,10 @@ bool list_contains(char** file_names, int num_files, char* file_name) {
     for (int i = 0; i < num_files; i++) {
         printf("|%s|, |%s|, %i, %i\n", file_names[i], file_name, i, num_files);
         if (strncmp(file_names[i], file_name, OSCAR_MAX_FILE_NAME_LEN) == 0) {
+            puts("containts is true"); 
             return true;
         }
     }
+    puts("containts is false"); 
     return false;
 }
