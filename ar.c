@@ -41,8 +41,10 @@ int main() {
     fclose(new_archive);
     fclose(read_file_1);
     fclose(read_file_2);
+    rename("2-s.txt", "2-s.txt.old");
+    rename("4-s.txt", "4-s.txt.old");
     delete("test.ar", 1, files_to_delete);
-    extract_archive("test.ar", 1, files_to_delete);
+    extract_archive("test.ar", 2, files_to_delete);
     return 0;
 }
 
@@ -54,10 +56,10 @@ void extract_archive(char* archive_name, int num_files, char** file_names) {
     struct oscar_hdr arch_md;
     get_file_meta_data(&arch_md, archive, "archive!!");
 
-    fseek(archive, OSCAR_ID_LEN+1, SEEK_SET);
+    fseek(archive, OSCAR_ID_LEN, SEEK_SET);
     long arch_size = strtol(arch_md.oscar_size, 0, 10);
     while (ftell(archive) < arch_size) {
-        fseek(archive, -1, SEEK_CUR);
+        //fseek(archive, -1, SEEK_CUR);
         read_file_meta_data(&md, archive);
         char file_name[OSCAR_MAX_FILE_NAME_LEN];
         memcpy(&file_name, md.oscar_name, OSCAR_MAX_FILE_NAME_LEN);
@@ -172,7 +174,7 @@ void mark_for_deletion(char *archive_name, size_t number_of_files,
     }
     FILE *archive = fopen(archive_name, "r+");
     struct oscar_hdr md;
-    fseek(archive, OSCAR_ID_LEN+1, SEEK_SET);
+    fseek(archive, OSCAR_ID_LEN, SEEK_SET);
     struct oscar_hdr arch_md;
     get_file_meta_data(&arch_md, archive, "archive!!");
     long archive_name_length = strtol(arch_md.oscar_size, NULL, 10);
@@ -181,7 +183,7 @@ void mark_for_deletion(char *archive_name, size_t number_of_files,
     long file_size = 0;
     char file_name[OSCAR_MAX_FILE_NAME_LEN+1];
     while (ftell(archive) < archive_name_length) {
-        fseek(archive, -1, SEEK_CUR);
+        //fseek(archive, -1, SEEK_CUR);
         fread(&md.oscar_name, OSCAR_MAX_FILE_NAME_LEN, 1, archive);
         fread(&md.oscar_name_len, 2, 1, archive);
         file_name_len = strtol(&md.oscar_name_len, NULL, 10);
@@ -278,6 +280,10 @@ int read_file_meta_data(struct oscar_hdr *md, FILE *file_in) {
     total_bytes += fread(md, sizeof(struct oscar_hdr), 1, file_in);
     //assert(total_bytes == sizeof(struct oscar_hdr));
     assert(!feof(file_in));
+    /*
+    if (ftell(file_in) % 2 != 0) {
+        fseek(file_in, 1, SEEK_CUR);
+    }*/
     return 0;
 }
 
@@ -341,9 +347,12 @@ int n_read_and_write_file(FILE* file_in, FILE *file_out, size_t num_bytes) {
     char ch;
     size_t bytes_read = 0;
     assert(!feof(file_in));
-    while((ch = fgetc(file_in)) != EOF && bytes_read < num_bytes) {
+    while(bytes_read < num_bytes) {
+        ch = fgetc(file_in);
         bytes_read++;
-        fputc(ch, file_out);
+        if (ch != EOF) {
+            fputc(ch, file_out);
+        }
     }
     assert(bytes_read == num_bytes);
     return 0;
