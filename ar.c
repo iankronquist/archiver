@@ -8,6 +8,9 @@
 #include <utime.h>
 #include <time.h>
 #include <stdbool.h>
+#include <sys/types.h>
+#include <sys/dir.h>
+#include <dirent.h>
 
 #include "oscar.h"
 FILE* create_new_archive(char* filename);
@@ -26,13 +29,14 @@ void mark_for_deletion(char *archive_name, size_t number_of_files,
 void delete(char *archive_name, size_t number_of_files,
                        char** file_names);
 
+void append_all(FILE *archive, char* archive_name);
 long ltell(int file_des);
 
 bool list_contains(char** file_names, int num_files, char* file_name);
 
 int main() {
-    char* files_to_delete[] = {"2-s.txt", "4-s.txt"};
-    extract_archive("arch24.oscar", 2, files_to_delete);
+    char* files_to_delete[] = {"3-s.txt", "2-s.txt", "4-s.txt"};
+    /*extract_archive("arch12345.oscar", 3, files_to_delete);
     FILE *new_archive = create_new_archive("test.ar");
     FILE *read_file_1 = fopen("2-s.txt", "r");
     FILE *read_file_2 = fopen("4-s.txt", "r");
@@ -43,8 +47,11 @@ int main() {
     fclose(read_file_2);
     rename("2-s.txt", "2-s.txt.old");
     rename("4-s.txt", "4-s.txt.old");
-    delete("test.ar", 1, files_to_delete);
+    //delete("test.ar", 1, files_to_delete);
     extract_archive("test.ar", 2, files_to_delete);
+    */
+    FILE *all_archive = create_new_archive("all_of_em.ar");
+    append_all(all_archive, "all_of_em.ar");
     return 0;
 }
 
@@ -92,6 +99,33 @@ void trim_trailing_spaces(char *fn, int length) {
     }
 }
 
+void append_all(FILE *archive, char *archive_name) {
+    DIR *cur_dir;
+    struct dirent *entity;
+    if ((cur_dir = opendir (".")) == NULL) {
+       perror ("Cannot open .");
+       exit (1);
+    }
+    while ((entity = readdir(cur_dir)) != NULL) {
+        if (entity->d_type != DT_REG) {
+            continue; 
+        }
+        char file_name[entity->d_namlen+1];
+        file_name[entity->d_namlen] = '\0';
+        strncpy(&file_name, entity->d_name, entity->d_namlen);
+        printf("%s, %s", archive_name, &file_name);
+        if (strcmp(archive_name, &file_name) == 0) {
+            continue;
+        }
+        if (access(&file_name, F_OK) == -1) {
+            printf("File %s already exists. Skipping...\n", file_name);
+            continue;
+        }
+        FILE *cur_file = fopen(&file_name, "r");
+        append_file(cur_file, &file_name, archive);
+    }
+}
+
 FILE* create_new_archive(char* filename) {
     if (access(filename, F_OK) != -1) {
         printf("Archive %s already exists!\n", filename);
@@ -133,7 +167,8 @@ int get_file_meta_data(struct oscar_hdr* md, FILE *get_file, char* file_name) {
     size_t file_name_len = strlen(file_name);
     num_bytes = snprintf(&buf, 2, "%zu", file_name_len);
     memcpy(md->oscar_name_len, &buf, 1);
-    // HACK
+    // HACK!
+    printf("nb %i \n", num_bytes);
     if (num_bytes != 2) {
         md->oscar_name_len[1] = md->oscar_name_len[0];
         md->oscar_name_len[0] = ' ';
